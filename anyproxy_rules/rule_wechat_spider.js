@@ -3,7 +3,8 @@
  */
 var path = require("path"),
     fs = require("fs"),
-    img = fs.readFileSync('/Users/dazhai/wxBot/temp/img_3538500157365673532.jpg');
+    //替换为本地图片图片,节省带宽
+    img = fs.readFileSync('img_3538500157365673532.jpg');
 
 var interceptFlag = false,
     db = require('./db.js'),
@@ -28,7 +29,7 @@ module.exports = {
 
     dealLocalResponse: function (req, reqBody, callback) {
         if (req.replaceLocalFile) {
-            callback(200, {"content-type":"image/png"},img );
+            callback(200, {"content-type":"image/png"}, img );
         }
     },
 
@@ -37,8 +38,10 @@ module.exports = {
 
     replaceRequestOption: function (req, option) {
         var newOption = option;
-        if(/google|btrace/i.test(newOption.headers.host)){//这里面的正则可以替换成自己不希望访问的网址特征字符串，这里面的btrace是一个腾讯视频的域名，经过实践发现特别容易导致浏览器崩溃，所以加在里面了，继续添加可以使用|分割。
-            newOption.hostname = "www.baidu.com";//这个ip也可以替换成其他的
+        //模拟器会后台访问google等,替换不希望访问的网址特征字符串,继续添加可以使用|分割。
+        if(/google|btrace/i.test(newOption.headers.host)){
+            //这个ip也可以替换成其他的
+            newOption.hostname = "www.baidu.com";
             newOption.port     = "80";
             }
             return newOption;
@@ -53,34 +56,31 @@ module.exports = {
     replaceResponseHeader: function (req, res, header) {
     },
 
+    //添加js代码,实现下一页或公众号切换
     getNextChunk: function (url, delay, nonce) {
         if (nonce) {
-            var next = '<script nonce="' + nonce + '" type="text/javascript">';
+            return '<script nonce="' + nonce + '" type="text/javascript">' +
+                   'setTimeout(function(){window.location.href="' + url + '";},'
+                   + delay + ')</script>';
         } else {
-            var next = '<script type="text/javascript">';
+            return '<script type="text/javascript">' + 'setTimeout(function()' +
+                   '{window.location.href="' + url + '";},' + delay + ')</script>';
         }
-        next += 'setTimeout(function(){window.location.href="' + url + '";},' + delay + ');';
-        next += '</script>';
-        return next;
     },
 
-    getTimeOutChunk: function (url, delay) {
-        var next = '<script type="text/javascript">';
-        next += 'setTimeout(function(){window.location.href="' + url + '";},' + delay * 10 + ');';
-        next += '</script>';
-        return next;
-    },
-    
-    getNotification: function () {
-        return '<h1 style="color:red; font-size:20px; text-align: center; ' +
-            'margin-top: 10px; margin-bottom: 10px;">5秒后自动刷新</h1>';
+    //在页面增加提示信息
+    getNotification: function (url, retry) {
+        if (retry) {
+            return '<h1 style="color:red; font-size:20px; text-align: center; ' +
+                   'margin-top: 10px; margin-bottom: 10px;"><a href="' + url +
+                   '">5秒后自动刷新或点击手动刷新</a></h1>';
+        } else {
+            return '<h1 style="color:red; font-size:20px; text-align: center; ' +
+                   'margin-top: 10px; margin-bottom: 10px;"><a href="' + url +
+                   '">出错20s后重试或点击手动刷新</a></h1>';
+        }
     },
 
-    getRetry: function (uu) {
-        return '<h1 style="color:red; font-size:20px; text-align: center; ' +
-            'margin-top: 10px; margin-bottom: 10px;">出错20s后重试 <br /> uu </h1>';
-    },
-    
     //替换服务器响应的数据,5s自动翻页,翻页逻辑在python接口处理(可实现增量爬取)
     replaceServerResDataAsync: function (req, res, serverResData, callback) {
         var that = this;
@@ -122,6 +122,7 @@ module.exports = {
                 var note = that.getRetry(startUrl);
                 callback(note + serverResData + next);
             }
+        //文章历史页
         } else if (/mp\/getmasssendmsg/i.test(req.url)) {
             var regUrl = /__biz=(.*?)&/;
             var retBiz = regUrl.exec(req.url);

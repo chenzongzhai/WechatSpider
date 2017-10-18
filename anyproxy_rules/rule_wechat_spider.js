@@ -3,7 +3,7 @@
  */
 var path = require("path"),
     fs = require("fs"),
-    //替换为本地图片图片,节省带宽
+    //本地图片路径
     img = fs.readFileSync('img_3538500157365673532.jpg');
 
 var interceptFlag = false,
@@ -27,9 +27,10 @@ module.exports = {
         }
     },
 
+    //替换为本地图片,节省带宽
     dealLocalResponse: function (req, reqBody, callback) {
         if (req.replaceLocalFile) {
-            callback(200, {"content-type":"image/png"}, img );
+            callback(200, {"content-type":"image/png"}, img);
         }
     },
 
@@ -61,10 +62,10 @@ module.exports = {
         if (nonce) {
             return '<script nonce="' + nonce + '" type="text/javascript">' +
                    'setTimeout(function(){window.location.href="' + url + '";},'
-                   + delay + ')</script>';
+                   + delay + ')</script>'
         } else {
-            return '<script type="text/javascript">' + 'setTimeout(function()' +
-                   '{window.location.href="' + url + '";},' + delay + ')</script>';
+            return '<script type="text/javascript">setTimeout(function()' +
+                   '{window.location.href="' + url + '";},' + delay + ')</script>'
         }
     },
 
@@ -83,32 +84,35 @@ module.exports = {
 
     //替换服务器响应的数据,5s自动翻页,翻页逻辑在python接口处理(可实现增量爬取)
     replaceServerResDataAsync: function (req, res, serverResData, callback) {
-        var that = this;
+        var that = this,
+            rest = require('restler'),
+            regUrl = /__biz=(.*?)&/,
+            retBiz = regUrl.exec(req.url);
+        if (retBiz) {
+            var biz = retBiz[1],
+                startUrl = 'https://mp.weixin.qq.com/mp/profile_ext?action=home&' +
+                           '__biz=' + biz + '{}&scene=124#wechat_redirect';
+        } else {
+            var startUrl = req.url;
+        }
         //首次访问
         if (/mp\/profile_ext\?action=home/i.test(req.url)) {
-            var regUrl = /__biz=(.*?)&/;
-            var retBiz = regUrl.exec(req.url);
-            var biz = retBiz[1];
             try {
-                var reg = /var msgList = \'(.*?)\';/;
-                var ret = reg.exec(serverResData.toString());
+                var reg = /var msgList = \'(.*?)\';/,
+                    ret = reg.exec(serverResData.toString());
                 if (!ret) {
                    console.log('profile_ext ' + req.url + ' home ' + ret);
                    callback(serverResData);
                    return;
                 }
                 var ret = ret[1].replace(/&quot;/g, '"');
-                //console.log('profile_ext ' + req.url + ' homepage ' + ret);
-                var rest = require('restler');
                 rest.post('http://127.0.0.1:8080/api_wechat', {
-                    data: {ret: ret, url: req.url, method: 'page'},
+                    data: {ret: ret, url: req.url, method: 'page'}
                 }).on('complete', function (data, response) {
-                    //console.log(data, response);
                     if (response.statusCode == 200) {
                         var next = that.getNextChunk(data, 5000);
-                        var timeRetry = that.getTimeOutChunk(req.url, 5000);
+                        var timeRetry = that.getNextChunk(req.url, 20000);
                         var note = that.getNotification();
-                        //console.log('server data ' + note + serverResData + next);
                         callback(note + serverResData + next + timeRetry);
                     }
                 });
@@ -116,38 +120,28 @@ module.exports = {
             catch (e) {
                 console.log(e);
                 //出错重试
-                var startUrl = 'https://mp.weixin.qq.com/mp/profile_ext?action=home&'
-                        '__biz=' + biz + '{}&scene=124#wechat_redirect';
                 var next = that.getNextChunk(startUrl, 20000);
-                var note = that.getRetry(startUrl);
+                var note = that.getNotification(startUrl, 'Y');
                 callback(note + serverResData + next);
             }
         //文章历史页
         } else if (/mp\/getmasssendmsg/i.test(req.url)) {
-            var regUrl = /__biz=(.*?)&/;
-            var retBiz = regUrl.exec(req.url);
-            var biz = retBiz[1];
             try {
                 var reg = /var msgList = (.*?);\r\n/;
                 var ret = reg.exec(serverResData.toString());
-                //console.log('getmasssendmsg ' + req.url + ' homepage ' + ret);
                 if (!ret) {
                     console.log('getmasssendmsg ' + req.url + ' homepage ' + ret);
                     callback(serverResData);
                     return;
                 }
                 var ret = ret[1].replace(/&quot;/g, '"');
-                //console.log('getmasssendmsg ' + req.url + ' homepage ' + ret);
-                var rest = require('restler');
                 rest.post('http://127.0.0.1:8080/api_wechat', {
-                    data: {ret: ret, url: req.url, method: 'page'},
+                    data: {ret: ret, url: req.url, method: 'page'}
                 }).on('complete', function (data, response) {
-                    //console.log(data, response);
                     if (response.statusCode == 200) {
                         var next = that.getNextChunk(data, 5000);
-                        var timeRetry = that.getTimeOutChunk(req.url, 5000);
+                        var timeRetry = that.getNextChunk(req.url, 20000);
                         var note = that.getNotification();
-                        //console.log('server data ' + note + serverResData + next);
                         callback(note + serverResData + next + timeRetry);
                     }
                 });
@@ -155,16 +149,12 @@ module.exports = {
             catch (e) {
                 console.log(e);
                 //出错重试
-                var startUrl = 'https://mp.weixin.qq.com/mp/profile_ext?action=home&'
-                        '__biz=' + biz + '{}&scene=124#wechat_redirect';
                 var next = that.getNextChunk(startUrl, 20000);
-                var note = that.getRetry(startUrl);
+                var note = that.getNotification(startUrl, 'Y');
                 callback(note + serverResData + next);
             }
+        //文章历史页
         } else if (/mp\/profile_ext\?action=getmsg/i.test(req.url)) {
-            var regUrl = /__biz=(.*?)&/;
-            var retBiz = regUrl.exec(req.url);
-            var biz = retBiz[1];
             try {
                 var reg = /var msgList = \'(.*?)\';/;
                 var ret = reg.exec(serverResData.toString());
@@ -172,17 +162,13 @@ module.exports = {
                    console.log('profile_ext ' + req.url + ' getmsg ' + ret);
                 }
                 var ret = ret[1].replace(/&quot;/g, '"');
-                //console.log('profile_ext ' + req.url + ' getmsg ' + ret);
-                var rest = require('restler');
                 rest.post('http://127.0.0.1:8080/api_wechat', {
-                    data: {ret: ret, url: req.url, method: 'page'},
+                    data: {ret: ret, url: req.url, method: 'page'}
                 }).on('complete', function (data, response) {
-                    //console.log(data, response);
                     if (response.statusCode == 200) {
                         var next = that.getNextChunk(data, 5000);
-                        var timeRetry = that.getTimeOutChunk(req.url, 5000);
+                        var timeRetry = that.getNextChunk(req.url, 20000);
                         var note = that.getNotification();
-                        //console.log('server data ' + note + serverResData + next);
                         callback(note + serverResData + next + timeRetry);
                     }
                 });
@@ -190,23 +176,19 @@ module.exports = {
             catch (e) {
                 console.log(e);
                 //出错重试
-                var startUrl = 'https://mp.weixin.qq.com/mp/profile_ext?action=home&'
-                        '__biz=' + biz + '{}&scene=124#wechat_redirect';
                 var next = that.getNextChunk(startUrl, 20000);
-                var note = that.getRetry(startUrl);
+                var note = that.getNotification(startUrl, 'Y');
                 callback(note + serverResData + next);
             }
+        //一轮爬取完毕,等待5分钟
         } else if (/mp\/get_data_msg/i.test(req.url)) {
             try {
-                var rest = require('restler');
                 rest.post('http://127.0.0.1:8080/api_wechat', {
-                    data: {ret: '', url: req.url, method: 'refresh'},
+                    data: {ret: '', url: req.url, method: 'refresh'}
                 }).on('complete', function (data, response) {
-                    //console.log(data, response);
                     if (response.statusCode == 200) {
                         var next = that.getNextChunk(data, 60000*5);
                         var note = that.getNotification();
-                        //console.log('server data ' + note + serverResData + next);
                         callback(note + serverResData + next);
                     }
                 });
@@ -215,10 +197,10 @@ module.exports = {
                 console.log(e);
                 //出错重试
                 var next = that.getNextChunk(req.url, 20000);
-                var note = that.getRetry(req.url);
+                var note = that.getNotification(req.url, 'Y');
                 callback(note + serverResData + next);
             }
-        }else {
+        } else {
             callback(serverResData);
         }
     },
@@ -236,5 +218,5 @@ module.exports = {
 
     setInterceptFlag: function (flag) {
         interceptFlag = flag;
-    },
+    }
 };

@@ -31,3 +31,5 @@
 * [微信公众号内容的批量采集与应用](https://zhuanlan.zhihu.com/c_65943221)
 * [微信协议简单调研笔记](http://www.blogjava.net/yongboy/archive/2015/11/05/410636.html)
 * [挖掘微信Web版通信的全过程](http://www.tanhao.me/talk/1466.html/)
+
+### QQ:754770516

@@ -91,7 +91,7 @@ module.exports = {
         if (retBiz) {
             var biz = retBiz[1],
                 startUrl = 'https://mp.weixin.qq.com/mp/profile_ext?action=home&' +
-                           '__biz=' + biz + '{}&scene=124#wechat_redirect';
+                           '__biz=' + biz + '&scene=124#wechat_redirect';
         } else {
             var startUrl = req.url;
         }
